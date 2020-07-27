@@ -5,70 +5,63 @@ using System.Text;
 //using Mono.Cecil;
 //using Mono.Cecil.Cil;
 
-namespace SuffixTree
-{
-    public class SuffixTree
-    {
+namespace SuffixTree {
+    public class SuffixTree<T> {
         private const int BOUNDLESS = -1;
 
         private ActivePoint _AP;
-        private int _remainder, _position = -1;
-        private Node _root, _needSuffixLink;
-        private List<char> _chars = new List<char>();
-        private Dictionary<(Node, char), Node> _structure = new Dictionary<(Node, char), Node>();
+        private int _remainder,
+        _position = -1;
+        private Node _root,
+        _needSuffixLink;
+        private List<T> _chars = new List<T> ();
+        private Dictionary <(Node, T), Node> _structure = new Dictionary <(Node, T), Node>();
         private Dictionary<Node, Node> _suffixLinks = new Dictionary<Node, Node>();
 
-        private class Node
-        {
+        private class Node {
             public int Start, End;
             //public Node Link; >> refactored to use Dictionary<Node, Node> _suffixLinks 
             public bool IsLeaf => End == BOUNDLESS;
         }
 
-        private class ActivePoint
-        {
+        private class ActivePoint {
+
             public Node ActiveEdge { get => _activeEdge; set => _activeEdge = value; }
-            public Node ActiveParent { get => _activeParent; set => _activeParent = !value.IsLeaf ? value : throw new Exception("Leaf node cannot be parent."); }
+            public Node ActiveParent { get => _activeParent; set => _activeParent = !value.IsLeaf ? value : throw new Exception ("Leaf node cannot be parent."); }
             public int ActiveLength { get; private set; }
 
             private Node _activeEdge;
             private Node _activeParent;
-            private SuffixTree _tree;
+            private SuffixTree<T> _tree;
 
-            public ActivePoint(SuffixTree tree)
-                => _tree = tree;
+            public ActivePoint (SuffixTree<T> tree) => _tree = tree;
 
-            public void ResetEdge()
-            {
+            public void ResetEdge () {
                 ActiveLength = 0;
                 ActiveEdge = null;
             }
 
-            public bool MoveDown(char c)
-            {
+            public bool MoveDown (T c) {
                 if (ActiveEdge == null &&
-                    !_tree.GetEdgeFor(ActiveParent, c, out _activeEdge))
+                    !_tree.GetEdgeFor (ActiveParent, c, out _activeEdge))
                     return false; // Cannot lock on edge
 
-                else if (_tree._chars[ActiveEdge.Start + ActiveLength] != c)
+                else if (EqualityComparer<T>.Default.Equals (_tree._chars[ActiveEdge.Start + ActiveLength], c))
                     return false; // Cannot match next char on edge
 
                 ActiveLength++; // Success matching. Simply locking on a new edge is a match too, since it equals a first char match.
 
-                if (!ActiveEdge.IsLeaf && ActiveLength == _tree.LengthOf(ActiveEdge))
-                {
+                if (!ActiveEdge.IsLeaf && ActiveLength == _tree.LengthOf (ActiveEdge)) {
                     ActiveParent = ActiveEdge;
-                    ResetEdge();
+                    ResetEdge ();
                 }
 
                 return true;
             }
 
-            public void Rescan()
-            {
+            public void Rescan () {
                 // If we can't jump to linked node, we need to jump to root, and use Remainder as ActiveLength
-                if (!_tree.GetLinkFor(_activeParent, out _activeParent))
-                {
+                if (!_tree.GetLinkFor (_activeParent, out _activeParent)) {
                     ActiveEdge = null;
                     ActiveParent = _tree._root;
                     ActiveLength = _tree._remainder - 1;
@@ -78,58 +71,52 @@ namespace SuffixTree
                     return;
 
                 // Keep jumping through edges until we find the first edge that is shorter than our remaining length
-                while (_tree.GetEdgeFor(ActiveParent, _tree._chars[_tree._position - ActiveLength], out _activeEdge)
-                    && ActiveLength >= _tree.LengthOf(_activeEdge))
-                {
-                    ActiveLength -= _tree.LengthOf(_activeEdge);
+                while (_tree.GetEdgeFor (ActiveParent, _tree._chars[_tree._position - ActiveLength], out _activeEdge) &&
+                    ActiveLength >= _tree.LengthOf (_activeEdge)) {
+                    ActiveLength -= _tree.LengthOf (_activeEdge);
                     ActiveParent = _activeEdge;
                 }
             }
         }
 
-        public SuffixTree()
-        {
-            _root = new Node() { Start = 0, End = 0 };
-            _structure.Add((null, default(char)), _root);
-            _AP = new ActivePoint(this) { ActiveParent = _root };
+        public SuffixTree () {
+            _root = new Node () { Start = 0, End = 0 };
+            _structure.Add ((null, default (T)), _root);
+            _AP = new ActivePoint (this) { ActiveParent = _root };
         }
 
         /// <summary>
         /// Creates and returns a tree with the specified value.
         /// Shorthand for separately instantiating and adding a string.
         /// </summary>
-        public static SuffixTree Build(string value)
-        {
-            var t = new SuffixTree();
-            t.AddString(value);
+        public static SuffixTree<T> Build (T[] value) {
+            var t = new SuffixTree<T> ();
+            t.AddArray (value);
             return t;
         }
 
         /// <summary>
         /// Extends the suffix tree with the specified value.
         /// </summary>
-        public void AddString(string value)
-        {
+        public void AddArray (T[] value) {
             // TODO: What about terminating with unique character?
             foreach (var c in value)
-                ExtendTree(c);
+                ExtendTree (c);
 
             _remainder = 0;
-            _AP.ResetEdge();
+            _AP.ResetEdge ();
             _AP.ActiveParent = _root;
         }
 
         // max remainder during construction is length of longest repeated substring
         private int _maxRemainder = -1;
         private int _endPoint = -1;
-        public (int length, int end) GetLongestRepeatedSubstring ()
-        {
+        public (int length, int end) GetLongestRepeatedSubstring () {
             return (_maxRemainder, _endPoint);
         }
 
-        public void ExtendTree(char c)
-        {
-            _chars.Add(c);
+        public void ExtendTree (T c) {
+            _chars.Add (c);
             _needSuffixLink = null;
             _position++;
             _remainder++;
@@ -138,81 +125,72 @@ namespace SuffixTree
                 _endPoint = _position;
             }
 
-            while (_remainder > 0)
-            {
-                if (_AP.MoveDown(c))
+            while (_remainder > 0) {
+                if (_AP.MoveDown (c))
                     break;
 
                 if (_AP.ActiveEdge != null)
-                    _AP.ActiveParent = InsertSplit(_AP);
+                    _AP.ActiveParent = InsertSplit (_AP);
 
-                InsertLeaf(_AP, c);
+                InsertLeaf (_AP, c);
                 _remainder--;
 
                 if (_remainder > 0)
-                    _AP.Rescan();
+                    _AP.Rescan ();
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int LengthOf(Node edge)
-            => (edge.End == -1 ? _position + 1 : edge.End) - edge.Start;
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private int LengthOf (Node edge) => (edge.End == -1 ? _position + 1 : edge.End) - edge.Start;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private char FirstCharOf(Node edge)
-            => _chars[edge.Start];
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private T FirstCharOf (Node edge) => _chars[edge.Start];
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private string LabelOf(Node edge)
-        {
-            var res = new char[LengthOf(edge)];
-            _chars.CopyTo(edge.Start, res, 0, LengthOf(edge));
-            return new string(res);
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private T[] LabelOf (Node edge) {
+            var res = new T[LengthOf (edge)];
+            _chars.CopyTo (edge.Start, res, 0, LengthOf (edge));
+            return res;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool GetLinkFor(Node node, out Node linkedNode)
-            => _suffixLinks.TryGetValue(node, out linkedNode);
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private bool GetLinkFor (Node node, out Node linkedNode) => _suffixLinks.TryGetValue (node, out linkedNode);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool GetEdgeFor(Node n, char c, out Node edge)
-            => _structure.TryGetValue((n, c), out edge);
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private bool GetEdgeFor (Node n, T c, out Node edge) => _structure.TryGetValue ((n, c), out edge);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Node InsertLeaf(ActivePoint ap, char c)
-        {
-            var node = new Node() { Start = _position, End = BOUNDLESS };
-            _structure.Add((ap.ActiveParent, c), node);
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private Node InsertLeaf (ActivePoint ap, T c) {
+            var node = new Node () { Start = _position, End = BOUNDLESS };
+            _structure.Add ((ap.ActiveParent, c), node);
 
             return node;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Node InsertSplit(ActivePoint ap)
-        {
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private Node InsertSplit (ActivePoint ap) {
             // Remove node to be split
-            var splittingPointId = (ap.ActiveParent, FirstCharOf(ap.ActiveEdge));
+            var splittingPointId = (ap.ActiveParent, FirstCharOf (ap.ActiveEdge));
             var splittable = ap.ActiveEdge;
-            _structure.Remove(splittingPointId);
+            _structure.Remove (splittingPointId);
 
             // Insert new branch node in place of split node
-            var branch = new Node() { Start = splittable.Start, End = splittable.Start + ap.ActiveLength };
-            _structure.Add(splittingPointId, branch);
+            var branch = new Node () { Start = splittable.Start, End = splittable.Start + ap.ActiveLength };
+            _structure.Add (splittingPointId, branch);
             _AP.ActiveEdge = branch;
-            AddSuffixLink(branch);
+            AddSuffixLink (branch);
 
             // Update split node, and reinsert as child of new branch
             splittable.Start = branch.End;
-            _structure.Add((branch, FirstCharOf(splittable)), splittable);
+            _structure.Add ((branch, FirstCharOf (splittable)), splittable);
 
             return branch;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void AddSuffixLink(Node node)
-        {
+        [MethodImpl (MethodImplOptions.AggressiveInlining)]
+        private void AddSuffixLink (Node node) {
             if (_needSuffixLink != null)
-                _suffixLinks.Add(_needSuffixLink, node);
+                _suffixLinks.Add (_needSuffixLink, node);
 
             _needSuffixLink = node;
         }
@@ -221,33 +199,25 @@ namespace SuffixTree
         /// Checks if the specified value is a substring of the tree content.
         /// Executes with O(n) time complexity, where n is the length of the value.
         /// </summary>
-        public bool Contains(string value)
-        {
+        public bool Contains (T[] value) {
             var node = _root;
             var valLen = value.Length;
 
             for (int i = 0; i < value.Length;) // i is incremented inside
             {
                 // Try locking on next edge (if successful, this is already a match, hence the i++)
-                if (!GetEdgeFor(node, value[i++], out node))
+                if (!GetEdgeFor (node, value[i++], out node))
                     return false;
 
                 // Match chars on locked edge until the end of edge or the end of value
                 var edgeEnd = node.IsLeaf ? _position + 1 : node.End;
-                for (int j = node.Start + 1; j < edgeEnd && i < valLen; j++, i++)
-                    if (_chars[j] != value[i])
+                for (int j = node.Start + 1; j < edgeEnd && i < valLen; j++, i++) {
+                    if (!EqualityComparer<T>.Default.Equals (_chars[j], value[i]))
                         return false;
+                }
             }
 
             return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private string DecodeLabel(string chars) {
-            // utf-16 encoded string. I just want to get out one byte at a time, and
-            // represent it as a string. ignore endianness for now.
-            var bytes = Encoding.Unicode.GetBytes (chars);
-            return BitConverter.ToString(bytes).Replace("-", "");
         }
 
         /// <summary>
@@ -255,19 +225,22 @@ namespace SuffixTree
         /// Works only with tree content consisting of lowercase a-z characters.
         /// Perhaps useful for debugging.
         /// </summary>
-        public string PrintTree() //Dictionary<char, Instruction> instruction)
+        public string PrintTree () //Dictionary<char, Instruction> instruction)
         {
-            var sb = new StringBuilder();
+            var sb = new StringBuilder ();
 
-            sb.AppendLine($"Content length: {_chars.Count}{Environment.NewLine}");
-            Print(0, _root);
-            return sb.ToString();
+            sb.AppendLine ($"Content length: {_chars.Count}{Environment.NewLine}");
+            Print (0, _root);
+            return sb.ToString ();
 
-            void Print(int depth, Node node)
-            {
+            string LabelAsString (T[] label) {
+                return string.Join (",", Array.ConvertAll (label, item => item.ToString ()));
+            }
+
+            void Print (int depth, Node node) {
                 var activeOrigin = "";
-                var strNodeLabel = LabelOf(node);
-                var nodeLabel = DecodeLabel(strNodeLabel); // string representation of the bytes for our characters
+                var labelOf = LabelOf (node);
+                var nodeLabel = LabelAsString (labelOf);
 
                 var openEndMark = "";
                 var linkMark = "";
@@ -279,22 +252,21 @@ namespace SuffixTree
                     // decode the length
                     // each character is 2 bytes, or 4 hexadecimal digits
                     var len = _AP.ActiveLength * 4;
-                    nodeLabel = nodeLabel.Insert(len, " | ");
+                    nodeLabel = nodeLabel.Insert (len, " | ");
                 }
 
                 if (node.IsLeaf)
                     openEndMark = "...";
 
-                if (GetLinkFor(node, out var linkedNode)) {
-                    var firstChar = FirstCharOf(linkedNode);
-                    var firstCharHex = DecodeLabel("" + firstChar);
-                    linkMark = " -> " + firstCharHex;
+                if (GetLinkFor (node, out var linkedNode)) {
+                    var firstChar = FirstCharOf (linkedNode);
+                    linkMark = " -> " + labelOf[0];
                 }
 
                 var label = "" + activeOrigin + depth + ":";
-//                var intr = instruction[strNodeLabel[0]];
-                sb.AppendLine(new string(' ', depth + 1 - activeOrigin.Length) + label + nodeLabel + openEndMark + linkMark);
-//                sb.AppendLine(new string(' ', depth + 1 - activeOrigin.Length) + new string(' ', label.Length) + instr.ToString());
+                //                var intr = instruction[strNodeLabel[0]];
+                sb.AppendLine (new string (' ', depth + 1 - activeOrigin.Length) + label + nodeLabel + openEndMark + linkMark);
+                //                sb.AppendLine(new string(' ', depth + 1 - activeOrigin.Length) + new string(' ', label.Length) + instr.ToString());
 
                 foreach (var e in _structure) {
                     var (_node, _c) = e.Key;
@@ -302,20 +274,18 @@ namespace SuffixTree
                         continue;
                     var childNode = e.Value;
 
-                    Print(depth + 1, childNode);
+                    Print (depth + 1, childNode);
                 }
 
-//                 for (char c = 'a'; c <= 'z'; c++)
-//                 {
-//                     if (_structure.TryGetValue((node, c), out var childNode))
-//                         Print(depth + 1, childNode);
-//                 }
+                //                 for (char c = 'a'; c <= 'z'; c++)
+                //                 {
+                //                     if (_structure.TryGetValue((node, c), out var childNode))
+                //                         Print(depth + 1, childNode);
+                //                 }
             }
         }
     }
 }
-
-
 
 //// Check against infinite edge match
 // if (AP.ActiveEdge != null && AP.ActiveEdge.Start + AP.ActiveLength == _position + 1) throw new InvalidOperationException("Infinite match error.");
